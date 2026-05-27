@@ -4,6 +4,8 @@ import com.shyamstudio.celestCombatPro.CelestCombatPro;
 import com.shyamstudio.celestCombatPro.configs.EventPriorityManager;
 import com.shyamstudio.celestCombatPro.Scheduler;
 import lombok.Getter;
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -25,6 +27,7 @@ public class CombatManager {
 
     @Getter private final Map<UUID, Long> enderPearlCooldowns;
     @Getter private final Map<UUID, Long> tridentCooldowns = new ConcurrentHashMap<>();
+    @Getter private final Map<UUID, Long> enchantedGoldenAppleCooldowns = new ConcurrentHashMap<>();
 
     // Combat configuration cache to avoid repeated config lookups
     private long combatDurationTicks;
@@ -45,6 +48,13 @@ public class CombatManager {
     private boolean tridentEnabled;
     private boolean refreshCombatOnTridentLand;
     private Map<String, Boolean> worldTridentBannedSettings = new ConcurrentHashMap<>();
+
+    // Enchanted golden apple cooldown configuration cache
+    private long enchantedGoldenAppleCooldownTicks;
+    private long enchantedGoldenAppleCooldownSeconds;
+    private Map<String, Boolean> worldEnchantedGoldenAppleSettings = new ConcurrentHashMap<>();
+    private boolean enchantedGoldenAppleInCombatOnly;
+    private boolean enchantedGoldenAppleEnabled;
     
     // UXM Claims configuration cache
     private boolean uxmClaimsEnabled;
@@ -90,11 +100,18 @@ public class CombatManager {
         this.tridentInCombatOnly = plugin.getConfig().getBoolean("trident_cooldown.in_combat_only", true);
         this.refreshCombatOnTridentLand = plugin.getConfig().getBoolean("trident.refresh_combat_on_land", false);
 
+        this.enchantedGoldenAppleCooldownTicks = plugin.getTimeFromConfig("enchanted_golden_apple_cooldown.duration", "30s");
+        this.enchantedGoldenAppleCooldownSeconds = enchantedGoldenAppleCooldownTicks / 20;
+        this.enchantedGoldenAppleEnabled = plugin.getConfig().getBoolean("enchanted_golden_apple_cooldown.enabled", false);
+        this.enchantedGoldenAppleInCombatOnly = plugin.getConfig().getBoolean("enchanted_golden_apple_cooldown.in_combat_only", false);
+
         // Load per-world settings
         loadWorldTridentSettings();
 
         // Load per-world settings
         loadWorldEnderPearlSettings();
+
+        loadWorldEnchantedGoldenAppleSettings();
         
         // Load UXM Claims settings
         loadUXMClaimsSettings();
@@ -151,6 +168,12 @@ public class CombatManager {
         this.tridentInCombatOnly = plugin.getConfig().getBoolean("trident_cooldown.in_combat_only", true);
         this.refreshCombatOnTridentLand = plugin.getConfig().getBoolean("trident.refresh_combat_on_land", false);
         loadWorldTridentSettings();
+
+        this.enchantedGoldenAppleCooldownTicks = plugin.getTimeFromConfig("enchanted_golden_apple_cooldown.duration", "30s");
+        this.enchantedGoldenAppleCooldownSeconds = enchantedGoldenAppleCooldownTicks / 20;
+        this.enchantedGoldenAppleEnabled = plugin.getConfig().getBoolean("enchanted_golden_apple_cooldown.enabled", false);
+        this.enchantedGoldenAppleInCombatOnly = plugin.getConfig().getBoolean("enchanted_golden_apple_cooldown.in_combat_only", false);
+        loadWorldEnchantedGoldenAppleSettings();
         
         // Load UXM Claims settings
         loadUXMClaimsSettings();
@@ -168,6 +191,17 @@ public class CombatManager {
             for (String worldName : Objects.requireNonNull(plugin.getConfig().getConfigurationSection("enderpearl_cooldown.worlds")).getKeys(false)) {
                 boolean enabled = plugin.getConfig().getBoolean("enderpearl_cooldown.worlds." + worldName, true);
                 worldEnderPearlSettings.put(worldName, enabled);
+            }
+        }
+    }
+
+    private void loadWorldEnchantedGoldenAppleSettings() {
+        worldEnchantedGoldenAppleSettings.clear();
+
+        if (plugin.getConfig().isConfigurationSection("enchanted_golden_apple_cooldown.worlds")) {
+            for (String worldName : Objects.requireNonNull(plugin.getConfig().getConfigurationSection("enchanted_golden_apple_cooldown.worlds")).getKeys(false)) {
+                boolean enabled = plugin.getConfig().getBoolean("enchanted_golden_apple_cooldown.worlds." + worldName, true);
+                worldEnchantedGoldenAppleSettings.put(worldName, enabled);
             }
         }
     }
@@ -221,6 +255,11 @@ public class CombatManager {
                             Bukkit.getPlayer(entry.getKey()) == null
             );
 
+            enchantedGoldenAppleCooldowns.entrySet().removeIf(entry ->
+                    currentTime > entry.getValue() ||
+                            Bukkit.getPlayer(entry.getKey()) == null
+            );
+
         }, 0L, COUNTDOWN_INTERVAL);
     }
 
@@ -234,8 +273,15 @@ public class CombatManager {
                 currentTime <= enderPearlCooldowns.get(playerUUID);
         boolean hasTridentCooldown = tridentCooldowns.containsKey(playerUUID) &&
                 currentTime <= tridentCooldowns.get(playerUUID);
+        boolean hasEnchantedGoldenAppleCooldown = enchantedGoldenAppleCooldowns.containsKey(playerUUID) &&
+                currentTime <= enchantedGoldenAppleCooldowns.get(playerUUID);
 
-        if (!inCombat && !hasPearlCooldown && !hasTridentCooldown) {
+        if (!inCombat && !hasPearlCooldown && !hasTridentCooldown && !hasEnchantedGoldenAppleCooldown) {
+            return;
+        }
+
+        if (hasEnchantedGoldenAppleCooldown) {
+            sendDynamicCooldownActionBar(player, currentTime, inCombat, hasPearlCooldown, hasTridentCooldown);
             return;
         }
 
@@ -293,6 +339,47 @@ public class CombatManager {
                 placeholders.put("time", String.valueOf(remainingTridentTime));
                 plugin.getMessageService().sendMessage(player, "trident_only_countdown", placeholders);
             }
+        }
+    }
+
+    private void sendDynamicCooldownActionBar(Player player, long currentTime, boolean inCombat,
+                                              boolean hasPearlCooldown, boolean hasTridentCooldown) {
+        StringBuilder actionBar = new StringBuilder();
+
+        if (inCombat) {
+            actionBar.append("&#4A90E2Combat: &#FFFFFF")
+                    .append(getRemainingCombatTime(player, currentTime))
+                    .append("s");
+        }
+
+        if (hasPearlCooldown) {
+            appendSeparator(actionBar);
+            actionBar.append("&#E94E77Pearl: &#FFFFFF")
+                    .append(getRemainingEnderPearlCooldown(player, currentTime))
+                    .append("s");
+        }
+
+        if (hasTridentCooldown) {
+            appendSeparator(actionBar);
+            actionBar.append("&#4FC3F7Trident: &#FFFFFF")
+                    .append(getRemainingTridentCooldown(player, currentTime))
+                    .append("s");
+        }
+
+        appendSeparator(actionBar);
+        actionBar.append("&#FFD54FEGap: &#FFFFFF")
+                .append(getRemainingEnchantedGoldenAppleCooldown(player, currentTime))
+                .append("s");
+
+        player.spigot().sendMessage(
+                ChatMessageType.ACTION_BAR,
+                TextComponent.fromLegacyText(plugin.getMessageService().colorize(actionBar.toString()))
+        );
+    }
+
+    private void appendSeparator(StringBuilder actionBar) {
+        if (actionBar.length() > 0) {
+            actionBar.append(" &#8B8B8B| ");
         }
     }
 
@@ -642,6 +729,70 @@ public class CombatManager {
         return (int) Math.ceil(Math.max(0, (endTime - currentTime) / 1000.0));
     }
 
+    public void setEnchantedGoldenAppleCooldown(Player player) {
+        if (player == null || !enchantedGoldenAppleEnabled) {
+            return;
+        }
+
+        String worldName = player.getWorld().getName();
+        if (worldEnchantedGoldenAppleSettings.containsKey(worldName)
+                && !worldEnchantedGoldenAppleSettings.get(worldName)) {
+            return;
+        }
+
+        if (enchantedGoldenAppleInCombatOnly && !isInCombat(player)) {
+            return;
+        }
+
+        enchantedGoldenAppleCooldowns.put(player.getUniqueId(),
+                System.currentTimeMillis() + (enchantedGoldenAppleCooldownSeconds * 1000L));
+    }
+
+    public boolean isEnchantedGoldenAppleOnCooldown(Player player) {
+        if (player == null || !enchantedGoldenAppleEnabled) {
+            return false;
+        }
+
+        String worldName = player.getWorld().getName();
+        if (worldEnchantedGoldenAppleSettings.containsKey(worldName)
+                && !worldEnchantedGoldenAppleSettings.get(worldName)) {
+            return false;
+        }
+
+        if (enchantedGoldenAppleInCombatOnly && !isInCombat(player)) {
+            return false;
+        }
+
+        UUID playerUUID = player.getUniqueId();
+        if (!enchantedGoldenAppleCooldowns.containsKey(playerUUID)) {
+            return false;
+        }
+
+        long cooldownEndTime = enchantedGoldenAppleCooldowns.get(playerUUID);
+        long currentTime = System.currentTimeMillis();
+
+        if (currentTime > cooldownEndTime) {
+            enchantedGoldenAppleCooldowns.remove(playerUUID);
+            return false;
+        }
+
+        return true;
+    }
+
+    public int getRemainingEnchantedGoldenAppleCooldown(Player player) {
+        return getRemainingEnchantedGoldenAppleCooldown(player, System.currentTimeMillis());
+    }
+
+    private int getRemainingEnchantedGoldenAppleCooldown(Player player, long currentTime) {
+        if (player == null) return 0;
+
+        UUID playerUUID = player.getUniqueId();
+        if (!enchantedGoldenAppleCooldowns.containsKey(playerUUID)) return 0;
+
+        long endTime = enchantedGoldenAppleCooldowns.get(playerUUID);
+        return (int) Math.ceil(Math.max(0, (endTime - currentTime) / 1000.0));
+    }
+
 
     public void shutdown() {
         // Cancel the global countdown task
@@ -658,6 +809,7 @@ public class CombatManager {
         combatOpponents.clear();
         enderPearlCooldowns.clear();
         tridentCooldowns.clear();
+        enchantedGoldenAppleCooldowns.clear();
     }
     
     private void loadUXMClaimsSettings() {

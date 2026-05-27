@@ -3,6 +3,7 @@ package com.shyamstudio.celestCombatPro.listeners;
 import com.shyamstudio.celestCombatPro.CelestCombatPro;
 import com.shyamstudio.celestCombatPro.combat.CombatManager;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -26,6 +27,7 @@ public class ItemRestrictionListener implements Listener {
 
     private boolean itemRestrictions;
     private List<String> disabledItems = Collections.emptyList();
+    private Map<String, Boolean> elytraDisabledWorlds = Collections.emptyMap();
 
     public ItemRestrictionListener(CelestCombatPro plugin,  CombatManager combatManager) {
         this.plugin = plugin;
@@ -37,6 +39,7 @@ public class ItemRestrictionListener implements Listener {
     public void reloadConfig() {
         this.itemRestrictions = plugin.getConfig().getBoolean("combat.item_restrictions.enabled", true);
         this.disabledItems = plugin.getConfig().getStringList("combat.item_restrictions.disabled_items");
+        this.elytraDisabledWorlds = loadElytraDisabledWorlds();
     }
 
     public static String formatItemName(Material material) {
@@ -61,15 +64,27 @@ public class ItemRestrictionListener implements Listener {
 
     // NOTE: This method is now registered dynamically with configurable priority
     public void onPlayerItemConsume(PlayerItemConsumeEvent event) {
-        // Check if item restrictions are enabled
-        if (!itemRestrictions) {
-            return;
-        }
-
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
 
-        if (combatManager.isInCombat(player)) {
+        if (item == null) {
+            return;
+        }
+
+        if (item.getType() == Material.ENCHANTED_GOLDEN_APPLE) {
+            if (combatManager.isEnchantedGoldenAppleOnCooldown(player)) {
+                event.setCancelled(true);
+
+                Map<String, String> placeholders = new HashMap<>();
+                placeholders.put("player", player.getName());
+                placeholders.put("time", String.valueOf(combatManager.getRemainingEnchantedGoldenAppleCooldown(player)));
+                plugin.getMessageService().sendMessage(player, "enchanted_golden_apple_cooldown", placeholders);
+                return;
+            }
+        }
+
+        // Check if item restrictions are enabled
+        if (itemRestrictions && combatManager.isInCombat(player)) {
             // Check if the consumed item is in the disabled items list
             if (isItemDisabled(item.getType())) {
                 event.setCancelled(true);
@@ -78,48 +93,57 @@ public class ItemRestrictionListener implements Listener {
                 placeholders.put("player", player.getName());
                 placeholders.put("item", formatItemName(item.getType()));
                 plugin.getMessageService().sendMessage(player, "item_use_blocked_in_combat", placeholders);
+                return;
             }
+        }
+
+        if (item.getType() == Material.ENCHANTED_GOLDEN_APPLE && !event.isCancelled()) {
+            combatManager.setEnchantedGoldenAppleCooldown(player);
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerMoveEvent(PlayerMoveEvent event) {
-        // Check if item restrictions are enabled
-        if (!itemRestrictions) {
+        Player player = event.getPlayer();
+        boolean elytraBlockedInWorld = isElytraDisabledInWorld(player.getWorld());
+
+        if (!itemRestrictions && !elytraBlockedInWorld) {
             return;
         }
 
-        Player player = event.getPlayer();
+        boolean elytraBlockedInCombat = combatManager.isInCombat(player) && disabledItems.contains("ELYTRA");
 
-        if (combatManager.isInCombat(player)) {
-            if (disabledItems.contains("ELYTRA") && player.isGliding()) {
+        if (elytraBlockedInWorld) {
+            ensureElytraUnequipped(player, "elytra_disabled_world");
+        }
+
+        if (elytraBlockedInCombat || elytraBlockedInWorld) {
+            if (player.isGliding()) {
                 player.setGliding(false);
 
                 Map<String, String> placeholders = new HashMap<>();
                 placeholders.put("player", player.getName());
                 placeholders.put("item", "Elytra");
-                plugin.getMessageService().sendMessage(player, "item_use_blocked_in_combat", placeholders);
+                plugin.getMessageService().sendMessage(player,
+                        elytraBlockedInWorld ? "elytra_disabled_world" : "item_use_blocked_in_combat",
+                        placeholders);
             }
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onInventoryClick(InventoryClickEvent event) {
-        // Check if item restrictions are enabled
-        if (!itemRestrictions) {
-            return;
-        }
-
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
 
-        if (!combatManager.isInCombat(player)) {
+        boolean elytraBlockedInWorld = isElytraDisabledInWorld(player.getWorld());
+        if (!itemRestrictions && !elytraBlockedInWorld) {
             return;
         }
 
-        // Check if ELYTRA is disabled
-        if (!disabledItems.contains("ELYTRA")) {
+        boolean elytraBlockedInCombat = combatManager.isInCombat(player) && disabledItems.contains("ELYTRA");
+        if (!elytraBlockedInCombat && !elytraBlockedInWorld) {
             return;
         }
 
@@ -128,13 +152,16 @@ public class ItemRestrictionListener implements Listener {
 
         // Prevent equipping Elytra to chestplate slot
         if (event.getSlot() == 38 && event.getSlotType() == org.bukkit.event.inventory.InventoryType.SlotType.ARMOR) {
-            if (clickedItem != null && clickedItem.getType() == Material.ELYTRA || cursorItem.getType() == Material.ELYTRA) {
+            if ((clickedItem != null && clickedItem.getType() == Material.ELYTRA)
+                    || (cursorItem != null && cursorItem.getType() == Material.ELYTRA)) {
                 event.setCancelled(true);
                 
                 Map<String, String> placeholders = new HashMap<>();
                 placeholders.put("player", player.getName());
                 placeholders.put("item", "Elytra");
-                plugin.getMessageService().sendMessage(player, "item_use_blocked_in_combat", placeholders);
+                plugin.getMessageService().sendMessage(player,
+                        elytraBlockedInWorld ? "elytra_disabled_world" : "item_use_blocked_in_combat",
+                        placeholders);
                 return;
             }
         }
@@ -148,26 +175,26 @@ public class ItemRestrictionListener implements Listener {
                 Map<String, String> placeholders = new HashMap<>();
                 placeholders.put("player", player.getName());
                 placeholders.put("item", "Elytra");
-                plugin.getMessageService().sendMessage(player, "item_use_blocked_in_combat", placeholders);
+                plugin.getMessageService().sendMessage(player,
+                        elytraBlockedInWorld ? "elytra_disabled_world" : "item_use_blocked_in_combat",
+                        placeholders);
             }
         }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerToggleFlight(PlayerToggleFlightEvent event) {
-        // Check if item restrictions are enabled
-        if (!itemRestrictions) {
-            return;
-        }
-
         Player player = event.getPlayer();
+        boolean elytraBlockedInWorld = isElytraDisabledInWorld(player.getWorld());
 
-        if (!combatManager.isInCombat(player)) {
+        if (!itemRestrictions && !elytraBlockedInWorld) {
             return;
         }
+
+        boolean elytraBlockedInCombat = combatManager.isInCombat(player) && disabledItems.contains("ELYTRA");
 
         // Check if ELYTRA is disabled and player is trying to start gliding
-        if (disabledItems.contains("ELYTRA") && event.isFlying() && 
+        if ((elytraBlockedInCombat || elytraBlockedInWorld) && event.isFlying() &&
             player.getInventory().getChestplate() != null && 
             player.getInventory().getChestplate().getType() == Material.ELYTRA) {
             
@@ -176,7 +203,9 @@ public class ItemRestrictionListener implements Listener {
             Map<String, String> placeholders = new HashMap<>();
             placeholders.put("player", player.getName());
             placeholders.put("item", "Elytra");
-            plugin.getMessageService().sendMessage(player, "item_use_blocked_in_combat", placeholders);
+            plugin.getMessageService().sendMessage(player,
+                    elytraBlockedInWorld ? "elytra_disabled_world" : "item_use_blocked_in_combat",
+                    placeholders);
         }
     }
 
@@ -227,5 +256,47 @@ public class ItemRestrictionListener implements Listener {
                         itemType.name().equalsIgnoreCase(disabledItem) ||
                                 itemType.name().contains(disabledItem)
                 );
+    }
+
+    private Map<String, Boolean> loadElytraDisabledWorlds() {
+        if (!plugin.getConfig().isConfigurationSection("combat.item_restrictions.elytra_disabled_worlds")) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, Boolean> worlds = new HashMap<>();
+        for (String worldName : plugin.getConfig()
+                .getConfigurationSection("combat.item_restrictions.elytra_disabled_worlds")
+                .getKeys(false)) {
+            worlds.put(worldName, plugin.getConfig().getBoolean(
+                    "combat.item_restrictions.elytra_disabled_worlds." + worldName, false));
+        }
+        return worlds;
+    }
+
+    private boolean isElytraDisabledInWorld(World world) {
+        return world != null && elytraDisabledWorlds.getOrDefault(world.getName(), false);
+    }
+
+    private void ensureElytraUnequipped(Player player, String messageKey) {
+        PlayerInventory inventory = player.getInventory();
+        ItemStack chestplate = inventory.getChestplate();
+
+        if (chestplate == null || chestplate.getType() != Material.ELYTRA) {
+            return;
+        }
+
+        inventory.setChestplate(null);
+
+        HashMap<Integer, ItemStack> leftover = inventory.addItem(chestplate);
+        if (!leftover.isEmpty()) {
+            for (ItemStack item : leftover.values()) {
+                player.getWorld().dropItemNaturally(player.getLocation(), item);
+            }
+        }
+
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("player", player.getName());
+        placeholders.put("item", "Elytra");
+        plugin.getMessageService().sendMessage(player, messageKey, placeholders);
     }
 }

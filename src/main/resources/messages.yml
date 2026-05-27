@@ -52,6 +52,10 @@ elytra_removed_combat_start:
   message: "&cYour %item% has been removed because you entered combat!"
   sound: block.note_block.pling
 
+elytra_disabled_world:
+  message: "&cElytra is disabled in this world!"
+  sound: block.note_block.pling
+
 # ------------------------------------------------------
 #                Ender Pearl Messages
 # ------------------------------------------------------
@@ -78,6 +82,13 @@ trident_cooldown:
 
 trident_only_countdown:
   action_bar: "&#4FC3F7Trident cooldown: &#FFFFFF%time%s"
+
+# ------------------------------------------------------
+#      Enchanted Golden Apple Messages
+# ------------------------------------------------------
+enchanted_golden_apple_cooldown:
+  action_bar: "&#FFD54FEnchanted Golden Apple cooldown: &#FFFFFF%time%s"
+  sound: block.note_block.pling
 
 # ------------------------------------------------------
 #              Combined Countdown Messages

@@ -125,6 +125,13 @@ combat:
       - CHORUS_FRUIT
       - ELYTRA
 
+    # Worlds where Elytra is fully disabled, even outside combat
+    # If a world is set to true here, players cannot equip or use Elytra there
+    elytra_disabled_worlds:
+      arena: true
+      world_the_end: false
+      # minigames: true
+
 #---------------------------------------------------
 #         ENDER PEARL COOLDOWN SYSTEM
 #---------------------------------------------------
@@ -147,6 +154,23 @@ enderpearl_cooldown:
   # Per-world settings (overrides global setting)
   worlds:
     minigames: false  # Example: cooldowns disabled in minigames world
+
+#---------------------------------------------------
+#   ENCHANTED GOLDEN APPLE COOLDOWN SYSTEM
+#---------------------------------------------------
+enchanted_golden_apple_cooldown:
+  # Enable/disable enchanted golden apple cooldowns
+  enabled: true
+
+  # Cooldown duration
+  duration: 30s
+
+  # Only apply cooldowns during combat
+  in_combat_only: false
+
+  # Per-world settings (overrides global enabled setting)
+  worlds:
+    minigames: false
 
 #---------------------------------------------------
 #         ENDER PEARL GLITCH PREVENTION
