@@ -131,6 +131,21 @@ newbie_protection_actionbar:
   action_bar: "&#4CAF50PvP Protection: &#FFFFFF%time%"
 
 # ------------------------------------------------------
+#             Death Inventory Messages
+# ------------------------------------------------------
+death_inventory_kept_newbie:
+  message: "&#4CAF50Your inventory was kept because newbie protection was active."
+  sound: entity.experience_orb.pickup
+
+death_inventory_kept_natural:
+  message: "&#4CAF50Your inventory was kept because %reason%."
+  sound: entity.experience_orb.pickup
+
+death_inventory_lost:
+  message: "&#E94E77Your inventory was dropped because %reason%."
+  sound: block.note_block.bass
+
+# ------------------------------------------------------
 #           Safe Zone Messages (WorldGuard)
 # ------------------------------------------------------
 combat_no_safezone_entry:

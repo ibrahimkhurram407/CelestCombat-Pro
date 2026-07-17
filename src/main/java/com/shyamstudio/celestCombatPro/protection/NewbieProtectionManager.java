@@ -39,6 +39,9 @@ public class NewbieProtectionManager {
     private Map<String, Boolean> worldProtectionSettings = new ConcurrentHashMap<>();
     private boolean protectFromPvP;
     private boolean protectFromMobs;
+    @Getter private boolean protectFromEndCrystals;
+    @Getter private boolean protectFromTnt;
+    @Getter private boolean keepInventory;
     private boolean removeOnDamageDealt;
 
     // Tasks
@@ -101,6 +104,9 @@ public class NewbieProtectionManager {
 
         this.protectFromPvP = config.getBoolean("newbie_protection.protect_from_pvp", true);
         this.protectFromMobs = config.getBoolean("newbie_protection.protect_from_mobs", false);
+        this.protectFromEndCrystals = config.getBoolean("newbie_protection.protect_from_end_crystals", true);
+        this.protectFromTnt = config.getBoolean("newbie_protection.protect_from_tnt", true);
+        this.keepInventory = config.getBoolean("newbie_protection.keep_inventory", false);
         this.removeOnDamageDealt = config.getBoolean("newbie_protection.remove_on_damage_dealt", true);
 
         loadWorldProtectionSettings();

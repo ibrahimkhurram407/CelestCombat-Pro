@@ -316,6 +316,9 @@ newbie_protection:
   # Protection settings
   protect_from_pvp: true      # Protect from player vs player damage
   protect_from_mobs: false    # Protect from mob damage
+  protect_from_end_crystals: true # Protect from end crystal (crystal PvP) damage
+  protect_from_tnt: true      # Protect from primed TNT and TNT minecart damage
+  keep_inventory: false       # Keep inventory if the player dies while protection is active
 
   # Removal conditions
   remove_on_damage_dealt: true    # Remove protection when player deals damages to another player
@@ -336,6 +339,96 @@ newbie_protection:
     world: true           # Enable protection in 'world'
     world_nether: false   # Disable protection in 'world_nether'
     world_the_end: false  # Disable protection in 'world_the_end'
+
+#---------------------------------------------------
+#              SEMI KEEP INVENTORY
+#---------------------------------------------------
+semi_keep_inventory:
+  # Keep inventory for configured natural deaths, but lose it for PvP,
+  # bosses, custom mobs, and unrecognized causes.
+  enabled: false
+
+  # Per-world overrides. World names are matched case-insensitively.
+  # Worlds not listed here use the global 'enabled' value above.
+  worlds:
+    desert: false
+
+  # Safe default: an unknown plugin/custom cause makes the player lose inventory.
+  unknown_causes_keep_inventory: false
+
+  # Non-entity causes that count as natural deaths.
+  natural_damage_causes:
+    - CONTACT
+    - CRAMMING
+    - DROWNING
+    - FALL
+    - FALLING_BLOCK
+    - FIRE
+    - FIRE_TICK
+    - FLY_INTO_WALL
+    - FREEZE
+    - HOT_FLOOR
+    - LAVA
+    - LIGHTNING
+    - STARVATION
+    - SUFFOCATION
+    - VOID
+    - WORLD_BORDER
+
+  # Vanilla mobs that count as natural. Keep bosses such as ENDER_DRAGON,
+  # WITHER, and WARDEN out of this list if their kills should drop inventory.
+  natural_mobs:
+    - BEE
+    - BLAZE
+    - BOGGED
+    - BREEZE
+    - CAVE_SPIDER
+    - CREEPER
+    - DROWNED
+    - ELDER_GUARDIAN
+    - ENDERMAN
+    - ENDERMITE
+    - EVOKER
+    - GHAST
+    - GOAT
+    - GUARDIAN
+    - HOGLIN
+    - HUSK
+    - LLAMA
+    - MAGMA_CUBE
+    - PANDA
+    - PHANTOM
+    - PIGLIN
+    - PIGLIN_BRUTE
+    - PILLAGER
+    - POLAR_BEAR
+    - PUFFERFISH
+    - RAVAGER
+    - SHULKER
+    - SILVERFISH
+    - SKELETON
+    - SLIME
+    - SPIDER
+    - STRAY
+    - VEX
+    - VINDICATOR
+    - WITCH
+    - WITHER_SKELETON
+    - WOLF
+    - ZOGLIN
+    - ZOMBIE
+    - ZOMBIE_VILLAGER
+    - ZOMBIFIED_PIGLIN
+
+  # Metadata/tag checks run before the natural_mobs allowlist. Add the
+  # identifiers used by your custom-mob plugin here.
+  custom_mob_detection:
+    metadata_keys:
+      - MythicMob
+      - mythicmob
+    scoreboard_tag_prefixes:
+      - "mythicmob:"
+      - "custommob:"
 
 #---------------------------------------------------
 #              WORLDGUARD INTEGRATION

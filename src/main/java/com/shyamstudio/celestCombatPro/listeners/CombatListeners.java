@@ -1,6 +1,7 @@
 package com.shyamstudio.celestCombatPro.listeners;
 
 import com.shyamstudio.celestCombatPro.CelestCombatPro;
+import com.shyamstudio.celestCombatPro.protection.DeathInventoryManager;
 import com.shyamstudio.celestCombatPro.combat.DeathAnimationManager;
 import com.shyamstudio.celestCombatPro.messages.MessageManager;
 import com.shyamstudio.celestCombatPro.protection.NewbieProtectionManager;
@@ -8,8 +9,11 @@ import com.shyamstudio.celestCombatPro.rewards.KillRewardManager;
 import com.shyamstudio.celestCombatPro.api.CelestCombatAPI;
 import com.shyamstudio.celestCombatPro.api.events.PreCombatEvent;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.EnderCrystal;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.TNTPrimed;
+import org.bukkit.entity.minecart.ExplosiveMinecart;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -19,6 +23,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerToggleFlightEvent;
 
@@ -35,6 +40,7 @@ public class CombatListeners implements Listener {
     private KillRewardManager killRewardManager;
     private DeathAnimationManager deathAnimationManager;
     private MessageManager messageManager;
+    private DeathInventoryManager deathInventoryManager;
 
     private final Map<UUID, Boolean> playerLoggedOutInCombat = new ConcurrentHashMap<>();
     // Add a map to track the last damage source for each player
@@ -50,12 +56,27 @@ public class CombatListeners implements Listener {
         this.killRewardManager = plugin.getKillRewardManager();
         this.deathAnimationManager = plugin.getDeathAnimationManager();
         this.messageManager = plugin.getMessageService();
+        this.deathInventoryManager = plugin.getDeathInventoryManager();
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player)) return;
         Player player = (Player) event.getEntity();
+
+        if (newbieProtectionManager.hasProtection(player)
+                && event instanceof EntityDamageByEntityEvent byEntity) {
+            Entity damager = byEntity.getDamager();
+            boolean protectedExplosion =
+                    (damager instanceof EnderCrystal && newbieProtectionManager.isProtectFromEndCrystals())
+                    || ((damager instanceof TNTPrimed || damager instanceof ExplosiveMinecart)
+                    && newbieProtectionManager.isProtectFromTnt());
+            if (protectedExplosion) {
+                event.setCancelled(true);
+                plugin.debug("Blocked protected explosion damage to newbie: " + player.getName());
+                return;
+            }
+        }
 
         // Only block explosion-style damage types inside safe zones
         EntityDamageEvent.DamageCause cause = event.getCause();
@@ -77,6 +98,7 @@ public class CombatListeners implements Listener {
         this.killRewardManager = plugin.getKillRewardManager();
         this.deathAnimationManager = plugin.getDeathAnimationManager();
         this.messageManager = plugin.getMessageService();
+        this.deathInventoryManager = plugin.getDeathInventoryManager();
 
         plugin.debug("CombatListeners managers reloaded successfully");
     }
@@ -268,11 +290,15 @@ public class CombatListeners implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR)
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerDeath(PlayerDeathEvent event) {
         Player victim = event.getEntity();
         Player killer = victim.getKiller();
         UUID victimId = victim.getUniqueId();
+
+        boolean playerCombatInvolved = (killer != null && !killer.equals(victim))
+                || CelestCombatAPI.getCombatAPI().isInCombat(victim);
+        deathInventoryManager.handleDeath(event, playerCombatInvolved);
 
         // Remove newbie protection on death (if they had it)
         if (newbieProtectionManager.hasProtection(victim)) {
@@ -343,12 +369,18 @@ public class CombatListeners implements Listener {
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        deathInventoryManager.sendPendingReason(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         UUID playerUUID = player.getUniqueId();
 
         // Handle newbie protection for new players
         newbieProtectionManager.handlePlayerJoin(player);
+        deathInventoryManager.sendPendingReason(player);
 
         if (playerLoggedOutInCombat.containsKey(playerUUID)) {
             if (playerLoggedOutInCombat.get(playerUUID)) {
@@ -441,5 +473,8 @@ public class CombatListeners implements Listener {
         playerLoggedOutInCombat.clear();
         lastDamageSource.clear();
         lastDamageTime.clear();
+        if (deathInventoryManager != null) {
+            deathInventoryManager.shutdown();
+        }
     }
 }

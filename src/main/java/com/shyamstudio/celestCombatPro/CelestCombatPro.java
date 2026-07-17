@@ -18,6 +18,7 @@ import com.shyamstudio.celestCombatPro.hooks.placeholders.CelestCombatExpansion;
 import com.shyamstudio.celestCombatPro.listeners.ItemRestrictionListener;
 import com.shyamstudio.celestCombatPro.listeners.TridentListener;
 import com.shyamstudio.celestCombatPro.protection.NewbieProtectionManager;
+import com.shyamstudio.celestCombatPro.protection.DeathInventoryManager;
 import com.shyamstudio.celestCombatPro.rewards.KillRewardManager;
 import com.shyamstudio.celestCombatPro.updates.ConfigUpdater;
 import com.shyamstudio.celestCombatPro.updates.UpdateChecker;
@@ -47,6 +48,7 @@ public final class CelestCombatPro extends JavaPlugin {
   private ItemRestrictionListener itemRestrictionListener;
   private DeathAnimationManager deathAnimationManager;
   private NewbieProtectionManager newbieProtectionManager;
+  private DeathInventoryManager deathInventoryManager;
   private WorldGuardHook worldGuardHook;
   private GriefPreventionHook griefPreventionHook;
   private UXMClaimsHook uxmClaimsHook;
@@ -79,6 +81,7 @@ public final class CelestCombatPro extends JavaPlugin {
     combatManager = new CombatManager(this);
     killRewardManager = new KillRewardManager(this);
     newbieProtectionManager = new NewbieProtectionManager(this);
+    deathInventoryManager = new DeathInventoryManager(this, newbieProtectionManager);
     
     // Initialize dynamic event handler system
     dynamicEventHandler = new DynamicEventHandler(this);
@@ -205,6 +208,9 @@ public final class CelestCombatPro extends JavaPlugin {
 
     if (newbieProtectionManager != null) {
       newbieProtectionManager.shutdown();
+    }
+    if (deathInventoryManager != null) {
+      deathInventoryManager.shutdown();
     }
 
     if (placeholderExpansion != null && hasPlaceholderAPI) {
@@ -335,6 +341,14 @@ public final class CelestCombatPro extends JavaPlugin {
     
     if (messageManager != null) {
       messageManager.reload();
+    }
+
+    if (newbieProtectionManager != null) {
+      newbieProtectionManager.reloadConfig();
+    }
+
+    if (deathInventoryManager != null) {
+      deathInventoryManager.loadConfig();
     }
 
     if (worldGuardHook != null) {
