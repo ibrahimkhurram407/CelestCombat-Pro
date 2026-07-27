@@ -116,14 +116,16 @@ combat:
       # - "eco give %player% 500"
       # - "give %player% diamond 5"
 
-  # Items blocked during combat (Foods, Potions, Elytra)
+  # Items blocked during combat (Foods, Potions, Elytra, Firework Rockets)
   item_restrictions:
     # Enable or disable item restrictions during combat
     enabled: true
-    # Items blocked during combat (Foods, Potions, Elytra)
+    # Use Bukkit material names. Add FIREWORK_ROCKET to block placing rockets,
+    # Elytra boosting, and firing firework rockets from crossbows during combat.
     disabled_items:
       - CHORUS_FRUIT
       - ELYTRA
+      # - FIREWORK_ROCKET
 
     # Worlds where Elytra is fully disabled, even outside combat
     # If a world is set to true here, players cannot equip or use Elytra there

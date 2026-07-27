@@ -4,11 +4,15 @@ import com.shyamstudio.celestCombatPro.CelestCombatPro;
 import com.shyamstudio.celestCombatPro.combat.CombatManager;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerToggleFlightEvent;
@@ -100,6 +104,48 @@ public class ItemRestrictionListener implements Listener {
         if (item.getType() == Material.ENCHANTED_GOLDEN_APPLE && !event.isCancelled()) {
             combatManager.setEnchantedGoldenAppleCooldown(player);
         }
+    }
+
+    /**
+     * Firework rockets are activated rather than consumed, so they need their
+     * own interaction handler to participate in the disabled-items system.
+     * Cancelling this event blocks both placing a firework and Elytra boosting.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onFireworkUse(PlayerInteractEvent event) {
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+
+        ItemStack item = event.getItem();
+        if (item == null || item.getType() != Material.FIREWORK_ROCKET) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+        if (!isItemRestrictedForPlayer(player, Material.FIREWORK_ROCKET)) {
+            return;
+        }
+
+        event.setCancelled(true);
+        sendItemBlockedMessage(player, Material.FIREWORK_ROCKET);
+    }
+
+    /**
+     * Also prevent pre-loaded firework rockets from being fired from a
+     * crossbow. This closes the remaining player-controlled firework path.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onFireworkCrossbowShot(EntityShootBowEvent event) {
+        if (!(event.getEntity() instanceof Player player)
+                || !(event.getProjectile() instanceof Firework)
+                || !isItemRestrictedForPlayer(player, Material.FIREWORK_ROCKET)) {
+            return;
+        }
+
+        event.setCancelled(true);
+        sendItemBlockedMessage(player, Material.FIREWORK_ROCKET);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -256,6 +302,19 @@ public class ItemRestrictionListener implements Listener {
                         itemType.name().equalsIgnoreCase(disabledItem) ||
                                 itemType.name().contains(disabledItem)
                 );
+    }
+
+    private boolean isItemRestrictedForPlayer(Player player, Material itemType) {
+        return itemRestrictions
+                && combatManager.isInCombat(player)
+                && isItemDisabled(itemType);
+    }
+
+    private void sendItemBlockedMessage(Player player, Material itemType) {
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("player", player.getName());
+        placeholders.put("item", formatItemName(itemType));
+        plugin.getMessageService().sendMessage(player, "item_use_blocked_in_combat", placeholders);
     }
 
     private Map<String, Boolean> loadElytraDisabledWorlds() {
