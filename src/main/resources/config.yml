@@ -134,6 +134,12 @@ combat:
       world_the_end: false
       # minigames: true
 
+    # Worlds where firework rockets are fully disabled, even outside combat.
+    # This blocks placing rockets, Elytra boosting, and firing rockets from crossbows.
+    firework_disabled_worlds:
+      koth: true
+      arena: false
+
 #---------------------------------------------------
 #         ENDER PEARL COOLDOWN SYSTEM
 #---------------------------------------------------

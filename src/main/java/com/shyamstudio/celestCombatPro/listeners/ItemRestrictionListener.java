@@ -32,6 +32,7 @@ public class ItemRestrictionListener implements Listener {
     private boolean itemRestrictions;
     private List<String> disabledItems = Collections.emptyList();
     private Map<String, Boolean> elytraDisabledWorlds = Collections.emptyMap();
+    private Map<String, Boolean> fireworkDisabledWorlds = Collections.emptyMap();
 
     public ItemRestrictionListener(CelestCombatPro plugin,  CombatManager combatManager) {
         this.plugin = plugin;
@@ -44,6 +45,7 @@ public class ItemRestrictionListener implements Listener {
         this.itemRestrictions = plugin.getConfig().getBoolean("combat.item_restrictions.enabled", true);
         this.disabledItems = plugin.getConfig().getStringList("combat.item_restrictions.disabled_items");
         this.elytraDisabledWorlds = loadElytraDisabledWorlds();
+        this.fireworkDisabledWorlds = loadFireworkDisabledWorlds();
     }
 
     public static String formatItemName(Material material) {
@@ -305,6 +307,10 @@ public class ItemRestrictionListener implements Listener {
     }
 
     private boolean isItemRestrictedForPlayer(Player player, Material itemType) {
+        if (itemType == Material.FIREWORK_ROCKET && isFireworkDisabledInWorld(player.getWorld())) {
+            return true;
+        }
+
         return itemRestrictions
                 && combatManager.isInCombat(player)
                 && isItemDisabled(itemType);
@@ -334,6 +340,25 @@ public class ItemRestrictionListener implements Listener {
 
     private boolean isElytraDisabledInWorld(World world) {
         return world != null && elytraDisabledWorlds.getOrDefault(world.getName(), false);
+    }
+
+    private Map<String, Boolean> loadFireworkDisabledWorlds() {
+        if (!plugin.getConfig().isConfigurationSection("combat.item_restrictions.firework_disabled_worlds")) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, Boolean> worlds = new HashMap<>();
+        for (String worldName : plugin.getConfig()
+                .getConfigurationSection("combat.item_restrictions.firework_disabled_worlds")
+                .getKeys(false)) {
+            worlds.put(worldName, plugin.getConfig().getBoolean(
+                    "combat.item_restrictions.firework_disabled_worlds." + worldName, false));
+        }
+        return worlds;
+    }
+
+    private boolean isFireworkDisabledInWorld(World world) {
+        return world != null && fireworkDisabledWorlds.getOrDefault(world.getName(), false);
     }
 
     private void ensureElytraUnequipped(Player player, String messageKey) {
