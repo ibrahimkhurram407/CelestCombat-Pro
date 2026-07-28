@@ -124,7 +124,7 @@ combat:
     # Elytra boosting, and firing firework rockets from crossbows during combat.
     disabled_items:
       - CHORUS_FRUIT
-      - ELYTRA
+      # - ELYTRA
       # - FIREWORK_ROCKET
 
     # Worlds where Elytra is fully disabled, even outside combat
