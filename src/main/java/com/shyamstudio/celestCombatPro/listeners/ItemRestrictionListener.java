@@ -2,6 +2,7 @@ package com.shyamstudio.celestCombatPro.listeners;
 
 import com.shyamstudio.celestCombatPro.CelestCombatPro;
 import com.shyamstudio.celestCombatPro.combat.CombatManager;
+import com.destroystokyo.paper.event.player.PlayerElytraBoostEvent;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.entity.Firework;
@@ -22,6 +23,7 @@ import org.bukkit.inventory.PlayerInventory;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 public class ItemRestrictionListener implements Listener {
@@ -125,6 +127,22 @@ public class ItemRestrictionListener implements Listener {
             return;
         }
 
+        Player player = event.getPlayer();
+        if (!isItemRestrictedForPlayer(player, Material.FIREWORK_ROCKET)) {
+            return;
+        }
+
+        event.setCancelled(true);
+        sendItemBlockedMessage(player, Material.FIREWORK_ROCKET);
+    }
+
+    /**
+     * Paper fires a dedicated event when a rocket boosts an Elytra. Handling
+     * it directly prevents the boost even when another plugin or a server
+     * implementation bypasses the generic interaction cancellation.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onElytraBoost(PlayerElytraBoostEvent event) {
         Player player = event.getPlayer();
         if (!isItemRestrictedForPlayer(player, Material.FIREWORK_ROCKET)) {
             return;
@@ -332,14 +350,15 @@ public class ItemRestrictionListener implements Listener {
         for (String worldName : plugin.getConfig()
                 .getConfigurationSection("combat.item_restrictions.elytra_disabled_worlds")
                 .getKeys(false)) {
-            worlds.put(worldName, plugin.getConfig().getBoolean(
+            worlds.put(worldName.toLowerCase(Locale.ROOT), plugin.getConfig().getBoolean(
                     "combat.item_restrictions.elytra_disabled_worlds." + worldName, false));
         }
         return worlds;
     }
 
     private boolean isElytraDisabledInWorld(World world) {
-        return world != null && elytraDisabledWorlds.getOrDefault(world.getName(), false);
+        return world != null
+                && elytraDisabledWorlds.getOrDefault(world.getName().toLowerCase(Locale.ROOT), false);
     }
 
     private Map<String, Boolean> loadFireworkDisabledWorlds() {
@@ -351,14 +370,15 @@ public class ItemRestrictionListener implements Listener {
         for (String worldName : plugin.getConfig()
                 .getConfigurationSection("combat.item_restrictions.firework_disabled_worlds")
                 .getKeys(false)) {
-            worlds.put(worldName, plugin.getConfig().getBoolean(
+            worlds.put(worldName.toLowerCase(Locale.ROOT), plugin.getConfig().getBoolean(
                     "combat.item_restrictions.firework_disabled_worlds." + worldName, false));
         }
         return worlds;
     }
 
     private boolean isFireworkDisabledInWorld(World world) {
-        return world != null && fireworkDisabledWorlds.getOrDefault(world.getName(), false);
+        return world != null
+                && fireworkDisabledWorlds.getOrDefault(world.getName().toLowerCase(Locale.ROOT), false);
     }
 
     private void ensureElytraUnequipped(Player player, String messageKey) {
